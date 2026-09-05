@@ -121,6 +121,36 @@ yourself before submitting — do not take mine on trust.**
 `com.techtush.dryrun` — matches the Play Console app entry and the publisher
 convention set by com.techtush.machinecharades. Permanent once published.
 
+## App access declaration — this one changes later
+
+**Today: "No — no part of my app is restricted."**
+
+True only because `ANDROID_API_KEY` in `StoreKeys.android.kt` is blank. With no
+key, billing reports unavailable, `plusActive` computes to true, the two-run
+cap never engages and the paywall is unreachable. A reviewer sees the whole app
+with no credentials.
+
+**⚠️ The moment RevenueCat is wired up, this declaration becomes false.**
+
+The two-run cap activates and the paywall appears, which is an "access tier"
+under Play's second bullet. When you upload the first build carrying a real
+key, change App access to **Yes** in the same session, *before* sending for
+review — not afterwards. A live paywall sitting under a "nothing is restricted"
+declaration is a misrepresentation, not a paperwork slip.
+
+"Yes" needs reviewer instructions, because there is no login to hand over.
+Either works:
+
+- **License testing** (Setup → License testing): add the reviewer account, then
+  write "The first two rehearsals are free. A subscription is required beyond
+  that. This account has license testing enabled, so it can be purchased at no
+  cost."
+- **Promo code** (Monetize → Promotion codes): generate one and paste it in.
+
+Recommendation: leave billing out of the closed test entirely. Testers get the
+app free and unlimited, which is what you want them reacting to, and the
+declaration cannot drift out of date while you are not looking.
+
 ## Other required fields
 
 - **Category**: Productivity (alternative: Education)
