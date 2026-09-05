@@ -38,3 +38,6 @@ private fun daysFromToday(epochMillis: Long): Long {
     val dayMs = 24L * 60 * 60 * 1000
     return (startOfDay(epochMillis) - startOfDay(System.currentTimeMillis())) / dayMs
 }
+
+actual fun localDayIndex(epochMillis: Long): Long =
+    startOfDay(epochMillis) / (24L * 60 * 60 * 1000)

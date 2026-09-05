@@ -20,7 +20,8 @@ import com.dryrun.app.models.SeedScenarios
 fun ScenarioPickerScreen(
     onPick: (SeedScenario) -> Unit,
     onWriteMyOwn: () -> Unit,
-    onBack: () -> Unit
+    /** Absent on the very first launch, where there is nothing behind this. */
+    onBack: (() -> Unit)? = null
 ) {
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize().safeContentPadding()) {
@@ -64,9 +65,11 @@ fun ScenarioPickerScreen(
                         onClick = onWriteMyOwn,
                         modifier = Modifier.fillMaxWidth().height(52.dp)
                     ) { Text("Write my own") }
-                    Spacer(Modifier.height(4.dp))
-                    TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
-                        Text("Back")
+                    if (onBack != null) {
+                        Spacer(Modifier.height(4.dp))
+                        TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+                            Text("Back")
+                        }
                     }
                 }
             }

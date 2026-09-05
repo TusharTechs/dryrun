@@ -59,21 +59,42 @@ object HedgeDetector {
         phrase("a little", HedgeKind.SOFTENER),
         phrase("a bit", HedgeKind.SOFTENER),
         phrase("maybe", HedgeKind.SOFTENER),
+        phrase("perhaps", HedgeKind.SOFTENER),
+        phrase("possibly", HedgeKind.SOFTENER),
         // Self-doubt -- undercut your own judgement before anyone else can.
         phrase("I think", HedgeKind.SELF_DOUBT),
         phrase("I guess", HedgeKind.SELF_DOUBT),
         phrase("I feel like", HedgeKind.SELF_DOUBT),
         phrase("I might be wrong but", HedgeKind.SELF_DOUBT),
+        // Pre-emptive self-deprecation: rubbish your own question before
+        // anyone else can. Contractions are spelled out both ways because the
+        // tokenizer keeps apostrophes rather than folding them.
+        phrase("I hope this isn't", HedgeKind.SELF_DOUBT),
+        phrase("I hope this is not", HedgeKind.SELF_DOUBT),
+        phrase("I'm probably", HedgeKind.SELF_DOUBT),
+        phrase("I am probably", HedgeKind.SELF_DOUBT),
+        phrase("I might be overthinking", HedgeKind.SELF_DOUBT),
+        phrase("not sure if this is", HedgeKind.SELF_DOUBT),
         // Permission -- hand them the decision you already made.
         phrase("does that make sense", HedgeKind.PERMISSION),
         phrase("if that's okay", HedgeKind.PERMISSION),
         phrase("if that is okay", HedgeKind.PERMISSION),
         phrase("I was wondering if", HedgeKind.PERMISSION),
+        phrase("any chance", HedgeKind.PERMISSION),
+        phrase("would you mind", HedgeKind.PERMISSION),
         // Pre-apology -- apologise for the conversation before having it.
         phrase("sorry to", HedgeKind.PRE_APOLOGY),
         phrase("no worries if not", HedgeKind.PRE_APOLOGY),
+        // The general form, so variants like "no worries at all if not" are
+        // caught too. Longest-first matching keeps this from double-counting.
+        phrase("no worries", HedgeKind.PRE_APOLOGY),
         phrase("not a big deal but", HedgeKind.PRE_APOLOGY),
-        phrase("hopefully", HedgeKind.PRE_APOLOGY)
+        phrase("hopefully", HedgeKind.PRE_APOLOGY),
+        phrase("apologies for", HedgeKind.PRE_APOLOGY),
+        phrase("I hate to ask", HedgeKind.PRE_APOLOGY),
+        phrase("leave you alone", HedgeKind.PRE_APOLOGY),
+        phrase("if it's not too much trouble", HedgeKind.PRE_APOLOGY),
+        phrase("if it is not too much trouble", HedgeKind.PRE_APOLOGY)
     ).sortedByDescending { it.tokens.size }
 
     // ---- exclusions ------------------------------------------------------

@@ -13,7 +13,9 @@ data class Rehearsal(
     val counterpartPersonality: String = "",
     val situation: String,
     val scheduledEpochMillis: Long,
-    val isCompleted: Boolean = false
+    val isCompleted: Boolean = false,
+    /** Orders the list when two conversations fall on the same day. */
+    val createdAtMillis: Long = 0L
 )
 
 /** The three activity types the category names. Shown as labels in the picker. */

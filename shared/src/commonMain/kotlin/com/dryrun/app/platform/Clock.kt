@@ -11,3 +11,12 @@ expect fun formatConversationTime(epochMillis: Long): String
 
 /** Epoch millis for [epochMillis]'s calendar day at [hour]:[minute] local time. */
 expect fun atLocalTimeOfDay(epochMillis: Long, hour: Int, minute: Int): Long
+
+/**
+ * The current local calendar day as a day number. Only differences between
+ * two of these are meaningful; the absolute value is not a date.
+ *
+ * Local rather than UTC so "today's line" changes at the user's midnight
+ * rather than at some hour that depends on their timezone.
+ */
+expect fun localDayIndex(epochMillis: Long): Long

@@ -3,12 +3,12 @@ package com.dryrun.app.data
 import android.content.Context
 import android.content.SharedPreferences
 
-actual class KeyValueStore(private val prefs: SharedPreferences) {
-    actual fun getString(key: String): String? = prefs.getString(key, null)
-    actual fun putString(key: String, value: String) {
+actual class KeyValueStore(private val prefs: SharedPreferences) : KeyStore {
+    actual override fun getString(key: String): String? = prefs.getString(key, null)
+    actual override fun putString(key: String, value: String) {
         prefs.edit().putString(key, value).apply()
     }
-    actual fun remove(key: String) {
+    actual override fun remove(key: String) {
         prefs.edit().remove(key).apply()
     }
 }

@@ -50,3 +50,12 @@ private fun daysFromToday(date: NSDate): Long {
     val diffSeconds = startOfTarget.timeIntervalSince1970 - startOfToday.timeIntervalSince1970
     return (diffSeconds / 86400.0).toLong()
 }
+
+actual fun localDayIndex(epochMillis: Long): Long {
+    val calendar = NSCalendar.currentCalendar
+    val unit = NSCalendarUnitYear or NSCalendarUnitMonth or NSCalendarUnitDay
+    val date = dateOf(epochMillis)
+    val startOfDay = calendar.dateFromComponents(calendar.components(unit, fromDate = date))
+        ?: return epochMillis / (24L * 60 * 60 * 1000)
+    return (startOfDay.timeIntervalSince1970 / 86400.0).toLong()
+}

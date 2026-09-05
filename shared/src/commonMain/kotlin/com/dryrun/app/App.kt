@@ -18,10 +18,13 @@ import com.dryrun.app.billing.PurchaseOutcome
 import com.dryrun.app.coach.RunComparison
 import com.dryrun.app.data.DryRunApi
 import com.dryrun.app.data.DryRunStore
+import com.dryrun.app.data.randomUuidV4
+import com.dryrun.app.drill.DailyDrill
 import com.dryrun.app.models.Rehearsal
 import com.dryrun.app.models.RunRecord
 import com.dryrun.app.notifications.LocalNotifier
 import com.dryrun.app.platform.currentTimeMillis
+import com.dryrun.app.platform.localDayIndex
 import com.dryrun.app.ui.*
 import com.dryrun.app.ui.theme.DryRunTheme
 import kotlinx.coroutines.launch
@@ -30,6 +33,8 @@ private sealed interface Screen {
     data object Onboarding : Screen
     data object Home : Screen
     data object Scenarios : Screen
+    data object Conversations : Screen
+    data object Drill : Screen
     data object Rehearsing : Screen
     data class Feedback(val run: RunRecord) : Screen
     data object Progress : Screen
@@ -43,10 +48,18 @@ fun App(localNotifier: LocalNotifier) {
         val store = remember { DryRunStore() }
         val api = remember { DryRunApi(store) }
 
-        var rehearsal by remember { mutableStateOf(store.rehearsal()) }
-        var runs by remember { mutableStateOf(store.runs()) }
+        var rehearsal by remember { mutableStateOf(store.activeRehearsal()) }
+        var conversations by remember { mutableStateOf(store.rehearsals()) }
+        // Scoped to the open conversation; the free tier counts every run.
+        var runs by remember { mutableStateOf(store.runs(rehearsal?.id.orEmpty())) }
+        var totalRuns by remember { mutableStateOf(store.allRuns().size) }
+        var drillDay by remember { mutableStateOf(store.drillLastCompletedDay()) }
         var screen by remember {
-            mutableStateOf<Screen>(if (store.rehearsal() == null) Screen.Onboarding else Screen.Home)
+            // The library first, not a blank form: opening to seven concrete
+            // conversations is a far easier start than an empty text field.
+            mutableStateOf<Screen>(
+                if (store.activeRehearsal() == null) Screen.Scenarios else Screen.Home
+            )
         }
         var session by remember { mutableStateOf<RehearsalSession?>(null) }
         var offers by remember { mutableStateOf<List<Offer>>(emptyList()) }
@@ -63,8 +76,22 @@ fun App(localNotifier: LocalNotifier) {
             Plus.refresh()
         }
 
+        /** Re-reads everything the screens draw from, after any write. */
+        fun refresh() {
+            conversations = store.rehearsals()
+            rehearsal = store.activeRehearsal()
+            runs = store.runs(rehearsal?.id.orEmpty())
+            totalRuns = store.allRuns().size
+        }
+
+        fun openConversation(fresh: Rehearsal) {
+            store.saveRehearsal(fresh)
+            refresh()
+            screen = Screen.Home
+        }
+
         fun startRun(scenarioCounterpart: String, scenarioSituation: String, scenarioId: String) {
-            if (!FreeTier.canStartRun(runs.size, plusActive)) {
+            if (!FreeTier.canStartRun(totalRuns, plusActive)) {
                 scope.launch { offers = Plus.offers() }
                 screen = Screen.Paywall
                 return
@@ -83,23 +110,31 @@ fun App(localNotifier: LocalNotifier) {
         }
 
         when (val current = screen) {
-            Screen.Onboarding -> OnboardingScreen(localNotifier) { role, personality, situation, whenMillis ->
-                val fresh = Rehearsal(
-                    counterpartRole = role,
-                    counterpartPersonality = personality,
-                    situation = situation,
-                    scheduledEpochMillis = whenMillis
-                )
-                store.saveRehearsal(fresh)
-                rehearsal = fresh
-                screen = Screen.Home
+            Screen.Onboarding -> {
+                // Fresh per visit, so two hand-written conversations never
+                // collide on one id -- and so their reminders stay separate.
+                val newId = remember { "custom_" + randomUuidV4() }
+                OnboardingScreen(localNotifier, newId) { role, personality, situation, whenMillis ->
+                    openConversation(
+                        Rehearsal(
+                            id = newId,
+                            counterpartRole = role,
+                            counterpartPersonality = personality,
+                            situation = situation,
+                            scheduledEpochMillis = whenMillis,
+                            createdAtMillis = currentTimeMillis()
+                        )
+                    )
+                }
             }
 
             Screen.Home -> rehearsal?.let { active ->
                 HomeScreen(
                     rehearsal = active,
                     runs = runs,
-                    runsLeft = FreeTier.runsLeft(runs.size, plusActive),
+                    runsLeft = FreeTier.runsLeft(totalRuns, plusActive),
+                    conversationCount = conversations.size,
+                    drillDoneToday = drillDay == localDayIndex(currentTimeMillis()),
                     onStartRun = {
                         startRun(
                             scenarioCounterpart = describeCounterpart(active),
@@ -109,33 +144,64 @@ fun App(localNotifier: LocalNotifier) {
                     },
                     onOpenRun = { screen = Screen.Feedback(it) },
                     onSeeProgress = { screen = Screen.Progress },
-                    onChangeConversation = { screen = Screen.Scenarios },
+                    onOpenDrill = { screen = Screen.Drill },
+                    onSeeConversations = { screen = Screen.Conversations },
                     onForgetEverything = {
                         store.forgetEverything()
-                        runs = emptyList()
-                        rehearsal = null
-                        screen = Screen.Onboarding
+                        refresh()
+                        screen = Screen.Scenarios
                     }
                 )
-            } ?: run { screen = Screen.Onboarding }
+            } ?: run { screen = Screen.Scenarios }
 
             Screen.Scenarios -> ScenarioPickerScreen(
                 onPick = { scenario ->
-                    val fresh = Rehearsal(
-                        id = scenario.id,
-                        counterpartRole = scenario.counterpartRole,
-                        counterpartPersonality = scenario.counterpartPersonality,
-                        situation = scenario.description,
-                        scheduledEpochMillis = rehearsal?.scheduledEpochMillis
-                            ?: (currentTimeMillis() + 24L * 60 * 60 * 1000)
+                    // Picking a scenario already on the list reopens it rather
+                    // than resetting it, so its runs and date survive.
+                    val existing = conversations.firstOrNull { it.id == scenario.id }
+                    openConversation(
+                        existing ?: Rehearsal(
+                            id = scenario.id,
+                            counterpartRole = scenario.counterpartRole,
+                            counterpartPersonality = scenario.counterpartPersonality,
+                            situation = scenario.description,
+                            scheduledEpochMillis = currentTimeMillis() + 24L * 60 * 60 * 1000,
+                            createdAtMillis = currentTimeMillis()
+                        )
                     )
-                    store.saveRehearsal(fresh)
-                    rehearsal = fresh
-                    screen = Screen.Home
                 },
                 onWriteMyOwn = { screen = Screen.Onboarding },
+                onBack = if (conversations.isEmpty()) null else ({ screen = Screen.Home })
+            )
+
+            Screen.Conversations -> ConversationsScreen(
+                rehearsals = conversations,
+                activeId = rehearsal?.id,
+                runsFor = { store.runs(it) },
+                onOpen = { openConversation(it) },
+                onNew = { screen = Screen.Scenarios },
+                onDelete = { target ->
+                    localNotifier.cancelAll(target.id)
+                    store.deleteRehearsal(target.id)
+                    refresh()
+                    if (store.activeRehearsal() == null) screen = Screen.Scenarios
+                },
                 onBack = { screen = Screen.Home }
             )
+
+            Screen.Drill -> {
+                val today = localDayIndex(currentTimeMillis())
+                DrillScreen(
+                    drill = DailyDrill.forDay(today),
+                    alreadyDoneToday = drillDay == today,
+                    onDone = {
+                        store.markDrillCompleted(today)
+                        drillDay = today
+                        screen = Screen.Home
+                    },
+                    onBack = { screen = Screen.Home }
+                )
+            }
 
             Screen.Rehearsing -> {
                 val active = session
@@ -155,12 +221,13 @@ fun App(localNotifier: LocalNotifier) {
                         onSend = { active.send(it) },
                         onFinish = {
                             scope.launch {
-                                active.finish()?.let { record ->
+                                active.finish()?.let { finished ->
+                                    val record = finished.copy(rehearsalId = activeRehearsal.id)
                                     store.saveRun(record)
-                                    runs = store.runs()
+                                    refresh()
                                     // Their own best line, handed back the morning of.
                                     localNotifier.scheduleMorningOfNudge(
-                                        scheduleId = "schedule_1",
+                                        scheduleId = activeRehearsal.id,
                                         bestLine = record.feedback.bestLine(),
                                         epochMillis = activeRehearsal.scheduledEpochMillis
                                     )
@@ -205,7 +272,7 @@ fun App(localNotifier: LocalNotifier) {
                 } else {
                     ProgressScreen(RunComparison.compare(first, latest)) {
                         // The wall sits here, after the comparison has been seen.
-                        screen = if (FreeTier.shouldShowPaywall(runs.size, plusActive)) {
+                        screen = if (FreeTier.shouldShowPaywall(totalRuns, plusActive)) {
                             scope.launch { offers = Plus.offers() }
                             Screen.Paywall
                         } else {

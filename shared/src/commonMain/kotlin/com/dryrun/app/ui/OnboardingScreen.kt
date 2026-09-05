@@ -20,6 +20,8 @@ private const val DAY_MS = 24L * 60 * 60 * 1000
 @Composable
 fun OnboardingScreen(
     localNotifier: LocalNotifier,
+    /** Addresses this conversation's reminders. Distinct per conversation. */
+    scheduleId: String,
     onComplete: (role: String, personality: String, situation: String, dateMillis: Long) -> Unit
 ) {
     var step by remember { mutableStateOf(1) }
@@ -88,8 +90,8 @@ fun OnboardingScreen(
                     askAboutReminder = false
                     localNotifier.requestPermission { granted ->
                         if (granted) {
-                            localNotifier.scheduleEveningBeforeReminder("schedule_1", role, whenMillis)
-                            localNotifier.scheduleFollowUp("schedule_1", whenMillis)
+                            localNotifier.scheduleEveningBeforeReminder(scheduleId, role, whenMillis)
+                            localNotifier.scheduleFollowUp(scheduleId, whenMillis)
                         }
                     }
                     OneSignalBridgeProvider.instance?.requestPermission { }

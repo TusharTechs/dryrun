@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Themed-icon silhouette for Android 13+. evenOdd knocks the two bars out of
+  the bubble, so the mark still reads once the launcher tints it flat.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#000000" android:fillType="evenOdd"
+        android:pathData="M38.879999999999995,30.96 H69.12 A9.36,9.36 0 0 1 78.48,40.32 V54.72 A9.36,9.36 0 0 1 69.12,64.08 H38.879999999999995 A9.36,9.36 0 0 1 29.52,54.72 V40.32 A9.36,9.36 0 0 1 38.879999999999995,30.96 Z M40.32,62.64 L36.72,76.32 L53.28,62.64 Z M39.96,40.32 H68.04 A2.52,2.52 0 0 1 70.56,42.84 V42.839999999999996 A2.52,2.52 0 0 1 68.04,45.36 H39.96 A2.52,2.52 0 0 1 37.44,42.839999999999996 V42.84 A2.52,2.52 0 0 1 39.96,40.32 Z M39.599999999999994,51.12 H57.599999999999994 A2.16,2.16 0 0 1 59.76,53.28 V53.28 A2.16,2.16 0 0 1 57.599999999999994,55.44 H39.599999999999994 A2.16,2.16 0 0 1 37.44,53.28 V53.28 A2.16,2.16 0 0 1 39.599999999999994,51.12 Z" />
+</vector>

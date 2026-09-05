@@ -23,10 +23,13 @@ fun HomeScreen(
     rehearsal: Rehearsal,
     runs: List<RunRecord>,
     runsLeft: Int?,
+    conversationCount: Int,
+    drillDoneToday: Boolean,
     onStartRun: () -> Unit,
     onOpenRun: (RunRecord) -> Unit,
     onSeeProgress: () -> Unit,
-    onChangeConversation: () -> Unit,
+    onOpenDrill: () -> Unit,
+    onSeeConversations: () -> Unit,
     onForgetEverything: () -> Unit
 ) {
     val colors = LocalDryRunColors.current
@@ -81,7 +84,15 @@ fun HomeScreen(
                 }
 
                 Spacer(Modifier.height(28.dp))
-                TextButton(onClick = onChangeConversation) { Text("Different conversation") }
+                DrillCard(drillDoneToday, onOpenDrill)
+
+                Spacer(Modifier.height(20.dp))
+                TextButton(onClick = onSeeConversations) {
+                    Text(
+                        if (conversationCount <= 1) "Your conversations"
+                        else "Your conversations ($conversationCount)"
+                    )
+                }
                 TextButton(onClick = { confirmForget = true }) { Text("Delete everything") }
             }
 
@@ -110,7 +121,7 @@ fun HomeScreen(
         AlertDialog(
             onDismissRequest = { confirmForget = false },
             title = { Text("Delete everything?") },
-            text = { Text("The conversation and every run, gone from this phone. There is no copy anywhere else.") },
+            text = { Text("Every conversation and every run, gone from this phone. There is no copy anywhere else.") },
             confirmButton = {
                 TextButton(onClick = {
                     confirmForget = false
@@ -121,6 +132,39 @@ fun HomeScreen(
                 TextButton(onClick = { confirmForget = false }) { Text("Keep") }
             }
         )
+    }
+}
+
+/**
+ * The one thing here that is worth opening on a day with nothing scheduled.
+ * Stated as an offer with its cost up front, and it looks the same whether or
+ * not it has been done -- a finished state that nagged would be a streak.
+ */
+@Composable
+private fun DrillCard(doneToday: Boolean, onClick: () -> Unit) {
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        ),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            Modifier.padding(16.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Today's line", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    if (doneToday) "Done today. Read it again if you like."
+                    else "One softened sentence. Say it straight. 60 seconds.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 

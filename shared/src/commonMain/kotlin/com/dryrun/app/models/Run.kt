@@ -78,6 +78,13 @@ data class FeedbackReport(
 /** One completed run. Device-local, always. */
 @Serializable
 data class RunRecord(
+    /**
+     * Which conversation this run belongs to. Runs from different
+     * conversations must never be numbered together or compared against each
+     * other. Empty only in records written before conversations could be kept
+     * side by side; the store stamps those on load.
+     */
+    val rehearsalId: String = "",
     val runNumber: Int,
     val transcript: List<Turn>,
     val feedback: FeedbackReport,
