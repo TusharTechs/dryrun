@@ -1,0 +1,15 @@
+name = "dry-run-worker"
+main = "src/index.ts"
+compatibility_date = "2025-09-06"
+compatibility_flags = ["nodejs_compat"]
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "56d20c3d9821471e93406bdb8145773b"
+
+[[kv_namespaces]]
+binding = "TOKENS"
+id = "69f9e8c7c92d442cb132c34287aaa82f"
+
+[vars]
+ENVIRONMENT = "development"
