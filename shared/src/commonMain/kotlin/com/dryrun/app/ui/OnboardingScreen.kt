@@ -9,7 +9,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.dryrun.app.notifications.LocalNotifier
-import com.dryrun.app.notifications.OneSignalBridgeProvider
 import com.dryrun.app.platform.atLocalTimeOfDay
 import com.dryrun.app.platform.currentTimeMillis
 import com.dryrun.app.platform.formatConversationTime
@@ -94,7 +93,6 @@ fun OnboardingScreen(
                             localNotifier.scheduleFollowUp(scheduleId, whenMillis)
                         }
                     }
-                    OneSignalBridgeProvider.instance?.requestPermission { }
                     onComplete(role, personality, situation, whenMillis)
                 }) { Text("Yes, remind me") }
             },
