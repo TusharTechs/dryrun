@@ -13,3 +13,6 @@ id = "69f9e8c7c92d442cb132c34287aaa82f"
 
 [vars]
 ENVIRONMENT = "development"
+# Development backend. Switched to "gemini" before store submission,
+# at which point src/llm/groq.ts is deleted entirely.
+LLM_PROVIDER = "groq"

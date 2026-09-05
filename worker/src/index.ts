@@ -1,9 +1,25 @@
-import { Env, RoleplayRequest, FeedbackRequest, RegisterRequest } from "./types";
+import {
+  Env,
+  RoleplayRequest,
+  FeedbackRequest,
+  RegisterRequest,
+  DeterministicFacts,
+  Difficulty,
+} from "./types";
 import { mintToken, verifyToken } from "./auth";
 import { checkRateLimit } from "./ratelimit";
 import { checkSafety } from "./safety";
-import { callGemini, formatTranscript } from "./gemini";
-import { buildRoleplaySystemPrompt } from "./prompts/roleplay";
+import { callModel, parseJsonLoosely } from "./llm/provider";
+import { formatTranscript } from "./transcript";
+import {
+  applyStateUpdate,
+  sanitiseIncomingState,
+  shouldOfferSilence,
+} from "./counterpart";
+import {
+  buildRoleplaySystemPrompt,
+  validateRoleplayOutput,
+} from "./prompts/roleplay";
 import {
   FEEDBACK_SYSTEM_PROMPT,
   buildFeedbackUserContent,
@@ -11,11 +27,7 @@ import {
 } from "./prompts/feedback";
 
 export default {
-  async fetch(
-    request: Request,
-    env: Env,
-    ctx: ExecutionContext
-  ): Promise<Response> {
+  async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method === "OPTIONS") {
       return new Response(null, {
         headers: {
@@ -26,11 +38,12 @@ export default {
       });
     }
 
-    const url = new URL(request.url);
-    const path = url.pathname;
+    const path = new URL(request.url).pathname;
 
     try {
       switch (path) {
+        case "/health":
+          return json({ ok: true, provider: env.LLM_PROVIDER ?? "gemini" });
         case "/register":
           return handleRegister(request, env);
         case "/roleplay":
@@ -40,49 +53,40 @@ export default {
         default:
           return json({ error: "not found" }, 404);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("Unhandled error:", err);
       return json({ error: "internal error" }, 500);
     }
   },
 };
 
-async function handleRegister(
-  request: Request,
-  env: Env
-): Promise<Response> {
+async function handleRegister(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
 
   const body = (await request.json()) as RegisterRequest;
-  if (!body.device_id || typeof body.device_id !== "string" || body.device_id.length < 8) {
+  if (!body.device_id || typeof body.device_id !== "string") {
     return json({ error: "invalid device_id" }, 400);
   }
-
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.device_id)) {
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      body.device_id
+    )
+  ) {
     return json({ error: "device_id must be a UUID v4" }, 400);
   }
 
-  const token = await mintToken(body.device_id, env);
-  return json({ token });
+  return json({ token: await mintToken(body.device_id, env) });
 }
 
-async function handleRoleplay(
-  request: Request,
-  env: Env
-): Promise<Response> {
+async function handleRoleplay(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
 
   const deviceId = await authenticate(request, env);
   if (!deviceId) return json({ error: "unauthorized" }, 401);
 
-  const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
-  const rl = await checkRateLimit(deviceId, ip, env);
+  const rl = await checkRateLimit(deviceId, clientIp(request), env);
   if (!rl.allowed) {
-    return json(
-      { error: "rate limited", retry_after_hours: 24 },
-      429,
-      { "X-RateLimit-Remaining": "0" }
-    );
+    return json({ error: "rate limited", retry_after_hours: 24 }, 429);
   }
 
   const body = (await request.json()) as RoleplayRequest;
@@ -90,55 +94,88 @@ async function handleRoleplay(
     return json({ error: "missing required fields" }, 400);
   }
 
+  const state = sanitiseIncomingState(body.state);
+
   const latestUserMsg =
     body.transcript.filter((t) => t.role === "user").slice(-1)[0]?.text ?? "";
-  const safetyInput = `${body.situation} ${latestUserMsg}`;
-  const safety = checkSafety(safetyInput);
+  const safety = checkSafety(`${body.situation} ${latestUserMsg}`);
   if (!safety.safe) {
     return json({ error: "content_blocked", message: safety.reason }, 422);
   }
 
-  const systemPrompt = buildRoleplaySystemPrompt(body.counterpart, body.situation);
-  const userContent = formatTranscript(body.transcript) +
-    (body.transcript.length === 0
-      ? "\n\n(The USER has not spoken yet. Wait for their first line. Respond with a short, in-character opening that shows you're in the room — a greeting, a wary 'what's up?', silence. One line max.)"
-      : "\n\nRespond as the counterpart. One to three sentences.");
+  const difficulty: Difficulty = body.difficulty === "harder" ? "harder" : "normal";
+  const systemPrompt = buildRoleplaySystemPrompt(
+    body.counterpart,
+    body.situation,
+    state,
+    difficulty
+  );
 
-  const result = await callGemini(
-    { systemPrompt, userContent, temperature: 0.7 },
+  const userContent =
+    body.transcript.length === 0
+      ? "(The USER has not spoken yet. Wait for their first line. Respond with a short, " +
+        "in-character opening that shows you're in the room — a greeting, a wary " +
+        "'what's up?'. One line max.)"
+      : `${formatTranscript(body.transcript)}\n\nRespond as the counterpart. One to three sentences.`;
+
+  const result = await callModel(
+    { systemPrompt, userContent, temperature: 0.7, tier: "quality", jsonMode: true },
     env
   );
 
   if (result.timedOut) {
-    return json({
-      reply: "",
-      error: "timeout",
-      message: "Connection hiccup — your words didn't land. Try again.",
-    }, 504);
+    return json(
+      {
+        reply: "",
+        state,
+        silence: false,
+        error: "timeout",
+        message: "Connection hiccup — your words didn't land. Try again.",
+      },
+      504
+    );
   }
 
-  if (!result.text) {
-    return json({
-      reply: "",
-      error: "model_error",
-      message: "Something went wrong on our end. Try again in a few seconds.",
-    }, 502);
+  const parsed = result.text ? validateRoleplayOutput(parseJsonLoosely(result.text)) : null;
+  if (!parsed) {
+    return json(
+      {
+        reply: "",
+        state,
+        silence: false,
+        error: "model_error",
+        message: "Something went wrong on our end. Try again in a few seconds.",
+      },
+      502
+    );
   }
 
-  return json({ reply: result.text.trim() });
+  // The model proposes; the state machine disposes. No jump bigger than one
+  // step, so a hostile counterpart cannot turn grateful in a single turn.
+  const nextState = applyStateUpdate(state, parsed.state);
+
+  const userTurnCount = body.transcript.filter((t) => t.role === "user").length;
+  const silence = shouldOfferSilence({
+    userMadeClearPoint: parsed.userMadeClearPoint === true,
+    userTurnCount,
+    beatsAlreadyOffered: body.beatsOffered ?? 0,
+    turnsSinceLastBeat: body.turnsSinceLastBeat ?? 99,
+  });
+
+  return json({
+    reply: silence ? "" : parsed.reply.trim(),
+    state: nextState,
+    silence,
+  });
 }
 
-async function handleFeedback(
-  request: Request,
-  env: Env
-): Promise<Response> {
+async function handleFeedback(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
 
   const deviceId = await authenticate(request, env);
   if (!deviceId) return json({ error: "unauthorized" }, 401);
 
-  const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
-  const rl = await checkRateLimit(deviceId, ip, env);
+  const rl = await checkRateLimit(deviceId, clientIp(request), env);
   if (!rl.allowed) {
     return json({ error: "rate limited", retry_after_hours: 24 }, 429);
   }
@@ -147,83 +184,59 @@ async function handleFeedback(
   if (!body.counterpart || !body.situation || !Array.isArray(body.transcript)) {
     return json({ error: "missing required fields" }, 400);
   }
+  if (body.transcript.length === 0) return json({ error: "empty transcript" }, 400);
 
-  if (body.transcript.length === 0) {
-    return json({ error: "empty transcript" }, 400);
-  }
+  const facts: DeterministicFacts = {
+    hedgeCount: body.facts?.hedgeCount ?? 0,
+    hedgeTopPhrase: body.facts?.hedgeTopPhrase ?? "",
+    hedgeTopCount: body.facts?.hedgeTopCount ?? 0,
+    silenceOffered: body.facts?.silenceOffered ?? 0,
+    silenceFilled: body.facts?.silenceFilled ?? 0,
+  };
 
-  const formatted = formatTranscript(body.transcript);
-  const userContent = buildFeedbackUserContent(
-    body.counterpart,
-    body.situation,
-    formatted
-  );
-
-  const result = await callGemini(
+  const result = await callModel(
     {
       systemPrompt: FEEDBACK_SYSTEM_PROMPT,
-      userContent,
+      userContent: buildFeedbackUserContent(
+        body.counterpart,
+        body.situation,
+        formatTranscript(body.transcript),
+        facts
+      ),
       temperature: 0,
-      timeoutMs: 6000,
+      tier: "fast",
+      jsonMode: true,
     },
     env
   );
 
-  if (result.timedOut) {
-    return json({
-      schema_version: 1,
-      criteria: [],
-      overall: "",
-      error: "timeout",
-    }, 504);
-  }
+  if (result.timedOut) return feedbackError("timeout", 504);
+  if (!result.text) return feedbackError("model_error", 502);
 
-  if (!result.text) {
-    return json({
-      schema_version: 1,
-      criteria: [],
-      overall: "",
-      error: "model_error",
-    }, 502);
-  }
-
-  let parsed: unknown;
-  try {
-    const cleaned = result.text
-      .replace(/^```(?:json)?\s*/m, "")
-      .replace(/\s*```$/m, "")
-      .trim();
-    parsed = JSON.parse(cleaned);
-  } catch {
-    return json({
-      schema_version: 1,
-      criteria: [],
-      overall: "",
-      error: "parse_error",
-    }, 502);
-  }
+  const parsed = parseJsonLoosely(result.text);
+  if (parsed === null) return feedbackError("parse_error", 502);
 
   const validated = validateFeedbackResponse(parsed);
-  if (!validated) {
-    return json({
-      schema_version: 1,
-      criteria: [],
-      overall: "",
-      error: "schema_violation",
-    }, 502);
-  }
+  if (!validated) return feedbackError("schema_violation", 502);
 
   return json(validated);
 }
 
-async function authenticate(
-  request: Request,
-  env: Env
-): Promise<string | null> {
-  const authHeader = request.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) return null;
-  const token = authHeader.slice(7);
-  return verifyToken(token, env);
+function feedbackError(error: string, status: number): Response {
+  return json(
+    { schema_version: 2, criteria: [], overall: "", strongest_line: "", error },
+    status
+  );
+}
+
+async function authenticate(request: Request, env: Env): Promise<string | null> {
+  const header = request.headers.get("Authorization");
+  if (!header?.startsWith("Bearer ")) return null;
+  return verifyToken(header.slice(7), env);
+}
+
+function clientIp(request: Request): string {
+  return request.headers.get("CF-Connecting-IP") ?? "unknown";
 }
 
 function json(
