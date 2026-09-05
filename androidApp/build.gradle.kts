@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.androidApplication)
@@ -19,9 +20,28 @@ dependencies {
     debugImplementation(libs.compose.uiTooling)
 }
 
+// Upload key for Play. Both the properties file and the .jks are gitignored;
+// without them the release build is simply unsigned rather than broken, so a
+// fresh clone still builds.
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
 android {
     namespace = "com.dryrun.app"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
+
+    signingConfigs {
+        if (keystoreProperties.getProperty("storeFile") != null) {
+            create("upload") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
 
     defaultConfig {
         applicationId = "com.dryrun.app"
@@ -37,6 +57,7 @@ android {
     }
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("upload")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

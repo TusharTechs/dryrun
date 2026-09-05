@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import com.dryrun.app.data.AppContextHolder
 import com.dryrun.app.notifications.LocalNotifier
 import com.dryrun.app.notifications.NotificationPermissionHost
 
@@ -21,6 +22,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+
+        AppContextHolder.applicationContext = applicationContext
 
         NotificationPermissionHost.requester = { onResult ->
             pendingPermissionResult = onResult

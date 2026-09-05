@@ -31,7 +31,7 @@ fun OnboardingScreen(
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(24.dp),
+            modifier = Modifier.fillMaxSize().safeContentPadding().padding(24.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
