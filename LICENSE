@@ -1,0 +1,31 @@
+Copyright (c) 2026 Tushar Agarwal. All rights reserved.
+
+DryRun's source is published so that anyone can check what the app does with
+what they type. It is source-available, not open source.
+
+You may:
+
+  - read, study and quote this source, with attribution;
+  - fork it on GitHub for the purpose of reading it;
+  - reuse short excerpts in articles, talks or teaching, with attribution.
+
+You may not, without prior written permission:
+
+  - redistribute this source or any substantial part of it;
+  - publish, distribute or sell an application built from it, in whole or in
+    part, including a rebranded or modified version;
+  - use it to train a machine learning model intended to reproduce it.
+
+The name "DryRun", the app's icon and its written content are not covered by
+any grant above.
+
+Third-party dependencies remain under their own licences.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+For permission beyond this licence: tusharaggarwal274@gmail.com
