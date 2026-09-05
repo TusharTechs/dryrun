@@ -1,5 +1,5 @@
 import { Env } from "../types";
-import { ModelCallOptions, ModelResult, ModelTier, isOutageStatus } from "./provider";
+import { ModelCallOptions, ModelResult, ModelTier, classifyFailure } from "./provider";
 
 // DEVELOPMENT ONLY. This whole file is deleted before store submission --
 // see the removal step in the build plan. Nothing else imports it directly.
@@ -53,7 +53,7 @@ export async function callGroq(
     if (!res.ok) {
       // Never log the response body -- it can echo the key back.
       console.error(`Groq error ${res.status}`);
-      return { text: null, timedOut: false, outage: isOutageStatus(res.status) };
+      return { text: null, timedOut: false, failure: classifyFailure(res.status) };
     }
 
     const data = (await res.json()) as any;

@@ -40,16 +40,20 @@ export default {
 
     const path = new URL(request.url).pathname;
 
+    // Every handler is awaited inside the try. Returning the promise instead
+    // would leave the try block before it settles, so a rejection escaped the
+    // catch entirely and surfaced as a Cloudflare 1101 page rather than the
+    // JSON the app knows how to read.
     try {
       switch (path) {
         case "/health":
           return json({ ok: true, provider: env.LLM_PROVIDER ?? "gemini" });
         case "/register":
-          return handleRegister(request, env);
+          return await handleRegister(request, env);
         case "/roleplay":
-          return handleRoleplay(request, env);
+          return await handleRoleplay(request, env);
         case "/feedback":
-          return handleFeedback(request, env);
+          return await handleFeedback(request, env);
         default:
           return json({ error: "not found" }, 404);
       }
@@ -136,10 +140,25 @@ async function handleRoleplay(request: Request, env: Env): Promise<Response> {
     );
   }
 
-  // The provider refused us outright -- dead key, spent credit, or its own
-  // rate limit. Retrying in a few seconds cannot fix that, so say so plainly
+  // Throttled upstream. Clears on its own, so ask for a moment rather than
+  // announcing an outage -- a burst of people practising at once causes this.
+  if (result.failure === "busy") {
+    return json(
+      {
+        reply: "",
+        state,
+        silence: false,
+        error: "service_busy",
+        message:
+          "A lot of people are practising right now. Give it a few seconds and say that again.",
+      },
+      503
+    );
+  }
+
+  // A dead key or spent credit. Retrying cannot fix it, so say so plainly
   // rather than sending the user round a loop that never succeeds.
-  if (result.outage) {
+  if (result.failure === "outage") {
     return json(
       {
         reply: "",
@@ -228,7 +247,8 @@ async function handleFeedback(request: Request, env: Env): Promise<Response> {
   );
 
   if (result.timedOut) return feedbackError("timeout", 504);
-  if (result.outage) return feedbackError("service_unavailable", 503);
+  if (result.failure === "busy") return feedbackError("service_busy", 503);
+  if (result.failure === "outage") return feedbackError("service_unavailable", 503);
   if (!result.text) return feedbackError("model_error", 502);
 
   const parsed = parseJsonLoosely(result.text);

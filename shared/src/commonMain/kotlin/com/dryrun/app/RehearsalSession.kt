@@ -101,6 +101,8 @@ class RehearsalSession(
                 fail("That's a lot of practice for one day. Come back tomorrow.")
             RoleplayResult.Offline ->
                 fail("No connection. Your words didn't land — try again.")
+            RoleplayResult.Busy ->
+                fail("A lot of people are practising right now. Give it a few seconds and say that again.")
             RoleplayResult.ServiceDown ->
                 fail(
                     "DryRun's practice partner is offline right now. " +
@@ -181,6 +183,10 @@ class RehearsalSession(
         _state.value = _state.value.copy(isScoring = false)
         val feedback = when (scored) {
             is FeedbackResult.Ok -> scored.report
+            FeedbackResult.Busy -> return scoringFailed(
+                "A lot of people are practising right now. Your run is still here — " +
+                    "give it a few seconds and try again."
+            )
             FeedbackResult.ServiceDown -> return scoringFailed(
                 "DryRun's practice partner is offline right now. That's our problem, " +
                     "not yours. Your run is still here — try again in a bit."

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import worker from "./index";
-import { isOutageStatus, bodyIndicatesOutage } from "./llm/provider";
+import { classifyFailure, bodyIndicatesOutage } from "./llm/provider";
 import { validateFeedbackResponse } from "./prompts/feedback";
 import { validateRoleplayOutput } from "./prompts/roleplay";
 import { checkSafety } from "./safety";
@@ -391,21 +391,21 @@ describe("validators", () => {
   });
 });
 
-describe("provider outage", () => {
-  it("treats refusal statuses as an outage and everything else as transient", () => {
-    // A dead key, spent credit, forbidden, or upstream throttling. None of
-    // these get better if the user taps retry a second later.
-    expect(isOutageStatus(401)).toBe(true);
-    expect(isOutageStatus(402)).toBe(true);
-    expect(isOutageStatus(403)).toBe(true);
-    expect(isOutageStatus(429)).toBe(true);
+describe("provider failures", () => {
+  it("separates a dead key from being throttled", () => {
+    // These do not clear on their own.
+    expect(classifyFailure(401)).toBe("outage");
+    expect(classifyFailure(402)).toBe("outage");
+    expect(classifyFailure(403)).toBe("outage");
 
-    // These might. They must not be reported as an outage.
-    expect(isOutageStatus(500)).toBe(false);
-    expect(isOutageStatus(502)).toBe(false);
-    expect(isOutageStatus(503)).toBe(false);
-    expect(isOutageStatus(504)).toBe(false);
-    expect(isOutageStatus(200)).toBe(false);
+    // This does, in seconds. Reporting it as an outage would tell a room full
+    // of testers the service is down when it is merely busy.
+    expect(classifyFailure(429)).toBe("busy");
+
+    // Transient faults are neither; they fall through to the normal retry copy.
+    for (const s of [200, 500, 502, 503, 504]) {
+      expect(classifyFailure(s)).toBeUndefined();
+    }
   });
 });
 
@@ -415,8 +415,9 @@ describe("provider outage body markers", () => {
       bodyIndicatesOutage('{"error":{"code":400,"status":"INVALID_ARGUMENT",' +
         '"message":"API key not valid. Please pass a valid API key."}}')
     ).toBe(true);
-    expect(bodyIndicatesOutage('{"error":{"status":"RESOURCE_EXHAUSTED"}}')).toBe(true);
-    expect(bodyIndicatesOutage('{"error":{"message":"Quota exceeded"}}')).toBe(true);
+    expect(bodyIndicatesOutage('{"error":{"status":"PERMISSION_DENIED"}}')).toBe(true);
+    // Quota and throttling arrive as 429 and are "busy", not an outage.
+    expect(bodyIndicatesOutage('{"error":{"message":"Quota exceeded"}}')).toBe(false);
   });
 
   it("does not mistake our own malformed request for an outage", () => {

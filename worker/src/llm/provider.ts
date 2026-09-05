@@ -28,36 +28,42 @@ export interface ModelResult {
   text: string | null;
   timedOut: boolean;
   /**
-   * True when the provider itself refused us -- a dead or revoked key,
-   * exhausted credit, or the provider's own rate limit. Distinct from a
-   * transient blip because retrying in a few seconds cannot fix it, and
-   * telling a user to do that is how you get uninstalled.
+   * Set when the provider itself refused us, and which kind:
+   *
+   *  - "outage" is a dead or revoked key, or spent credit. Retrying cannot
+   *    fix it, and telling a user to try again is how you get uninstalled.
+   *  - "busy" is the provider throttling us. It clears on its own in
+   *    seconds, so it must NOT be reported as the service being down.
+   *
+   * Conflating the two is easy and wrong: a burst of testers all practising
+   * at once trips throttling, and "we are offline" is both false and alarming.
    */
-  outage?: boolean;
+  failure?: ProviderFailure;
 }
 
-/**
- * Provider statuses that mean "this will not work on a retry": bad key,
- * no credit, forbidden, or we are being throttled upstream.
- */
-export function isOutageStatus(status: number): boolean {
-  return status === 401 || status === 402 || status === 403 || status === 429;
+export type ProviderFailure = "outage" | "busy";
+
+/** Maps an HTTP status from a provider onto what we should tell the user. */
+export function classifyFailure(status: number): ProviderFailure | undefined {
+  // Throttling. Common, transient, and the one a burst of real users causes.
+  if (status === 429) return "busy";
+  // Bad key, no credit, forbidden. None of these clear on their own.
+  if (status === 401 || status === 402 || status === 403) return "outage";
+  return undefined;
 }
 
 /**
  * Google answers a dead or revoked key with 400 INVALID_ARGUMENT rather than
  * 401, so status alone would file it as a passing glitch and tell the user to
- * retry forever. These markers are the ones Google uses for key and quota
- * problems; matching is done on the marker only, and the body is never logged
- * because it can echo the key back.
+ * retry forever. Only key and billing markers are matched here -- throttling
+ * and quota arrive as 429 and are handled as "busy" instead. The body is
+ * never logged, because it can echo the key back.
  */
 export function bodyIndicatesOutage(body: string): boolean {
   const markers = [
     "API_KEY_INVALID",
     "API key not valid",
     "PERMISSION_DENIED",
-    "RESOURCE_EXHAUSTED",
-    "quota",
     "billing",
   ];
   const haystack = body.toLowerCase();
@@ -71,10 +77,30 @@ const DEFAULT_TIMEOUT_MS: Record<ModelTier, number> = {
   fast: 8000,
 };
 
+/**
+ * Providers throttle hard under concurrency -- 30 simultaneous calls came back
+ * 26 throttled in testing, and a handful of people rehearsing at the same
+ * moment is exactly the shape of this app's traffic. One short retry absorbs
+ * almost all of it before the user ever sees a message.
+ *
+ * Only "busy" is retried. An outage is retried never, because it cannot
+ * succeed, and a timeout is retried never, because the caller has already
+ * waited the full budget.
+ */
+const RETRY_DELAY_MS = 700;
+
 export async function callModel(
   opts: ModelCallOptions,
   env: Env
 ): Promise<ModelResult> {
+  const first = await callOnce(opts, env);
+  if (first.failure !== "busy") return first;
+
+  await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+  return callOnce(opts, env);
+}
+
+async function callOnce(opts: ModelCallOptions, env: Env): Promise<ModelResult> {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS[opts.tier];
   const provider = (env.LLM_PROVIDER ?? "gemini").toLowerCase();
 

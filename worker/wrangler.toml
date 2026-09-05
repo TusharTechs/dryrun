@@ -16,3 +16,16 @@ ENVIRONMENT = "development"
 # Development backend. Switched to "gemini" before store submission,
 # at which point src/llm/groq.ts is deleted entirely.
 LLM_PROVIDER = "groq"
+
+# These count REQUESTS, not runs. One run is roughly seven requests -- about
+# six roleplay turns plus one scoring call -- so divide by seven to think in
+# runs. The old default of 20 meant under three runs a day, which is barely
+# more than the two a free user gets for nothing, and the whole loop is "run
+# it again". A subscriber rehearsing the night before would have hit the wall
+# mid-session and been told to come back tomorrow.
+#
+# 150 is ~21 runs a day, which no real person reaches, and costs at most about
+# four cents a day at Groq's rates. An IP maxing 400 costs around eleven cents.
+# Abuse is bounded by these; genuine use never touches them.
+PER_TOKEN_DAILY_LIMIT = "150"
+PER_IP_DAILY_LIMIT = "400"

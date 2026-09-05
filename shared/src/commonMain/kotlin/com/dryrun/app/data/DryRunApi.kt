@@ -78,8 +78,11 @@ class DryRunApi(private val store: DryRunStore) {
             when {
                 res.status.value == 422 -> RoleplayResult.Blocked(res.body<BlockedResponse>().message)
                 res.status.value == 429 -> RoleplayResult.RateLimited
-                // 503 is the provider refusing us, not a passing blip.
-                res.status.value == 503 -> RoleplayResult.ServiceDown
+                // 503 covers two different things, and the body says which.
+                res.status.value == 503 ->
+                    if (res.body<BlockedResponse>().error == "service_busy")
+                        RoleplayResult.Busy
+                    else RoleplayResult.ServiceDown
                 !res.status.isSuccess() -> RoleplayResult.Failed
                 else -> {
                     val body = res.body<RoleplayResponse>()
@@ -123,7 +126,10 @@ class DryRunApi(private val store: DryRunStore) {
                     )
                 )
             }
-            if (res.status.value == 503) return FeedbackResult.ServiceDown
+            if (res.status.value == 503) {
+                return if (res.body<FeedbackResponseWire>().error == "service_busy")
+                    FeedbackResult.Busy else FeedbackResult.ServiceDown
+            }
             if (!res.status.isSuccess()) return FeedbackResult.Failed
             val body = res.body<FeedbackResponseWire>()
             if (body.criteria.size != 4) return FeedbackResult.Failed
@@ -150,6 +156,7 @@ class DryRunApi(private val store: DryRunStore) {
 sealed interface FeedbackResult {
     data class Ok(val report: FeedbackReport) : FeedbackResult
     data object ServiceDown : FeedbackResult
+    data object Busy : FeedbackResult
     data object Offline : FeedbackResult
     data object Failed : FeedbackResult
 }
@@ -161,6 +168,8 @@ sealed interface RoleplayResult {
     data object Offline : RoleplayResult
     /** The service is down at our end. Retrying now will not help. */
     data object ServiceDown : RoleplayResult
+    /** Throttled upstream. Clears in seconds, so retrying is the right advice. */
+    data object Busy : RoleplayResult
     data object Failed : RoleplayResult
 }
 
@@ -174,7 +183,11 @@ private fun Turn.toWire() = WireTurn(
 @Serializable private data class RegisterBody(@SerialName("device_id") val deviceId: String)
 @Serializable private data class RegisterResponse(val token: String)
 @Serializable private data class WireTurn(val role: String, val text: String)
-@Serializable private data class BlockedResponse(val message: String = "")
+@Serializable private data class BlockedResponse(
+    val message: String = "",
+    /** Distinguishes service_busy from service_unavailable on a 503. */
+    val error: String = ""
+)
 
 @Serializable
 private data class RoleplayBody(
@@ -226,5 +239,6 @@ private data class FeedbackResponseWire(
     @SerialName("schema_version") val schemaVersion: Int = 0,
     val criteria: List<WireCriterion> = emptyList(),
     val overall: String = "",
-    @SerialName("strongest_line") val strongestLine: String = ""
+    @SerialName("strongest_line") val strongestLine: String = "",
+    val error: String = ""
 )

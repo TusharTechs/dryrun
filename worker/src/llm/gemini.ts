@@ -3,7 +3,7 @@ import {
   ModelCallOptions,
   ModelResult,
   ModelTier,
-  isOutageStatus,
+  classifyFailure,
   bodyIndicatesOutage,
 } from "./provider";
 
@@ -49,13 +49,13 @@ export async function callGemini(
       // Never log the response body -- it can echo the key back. It is read
       // only to tell a dead key from a transient fault, because Google reports
       // the former as a 400 that would otherwise look retryable.
-      let outage = isOutageStatus(res.status);
-      if (!outage && res.status === 400) {
+      let failure = classifyFailure(res.status);
+      if (!failure && res.status === 400) {
         const detail = await res.text().catch(() => "");
-        outage = bodyIndicatesOutage(detail);
+        if (bodyIndicatesOutage(detail)) failure = "outage";
       }
-      console.error(`Gemini error ${res.status}${outage ? " (outage)" : ""}`);
-      return { text: null, timedOut: false, outage };
+      console.error(`Gemini error ${res.status}${failure ? ` (${failure})` : ""}`);
+      return { text: null, timedOut: false, failure };
     }
 
     const data = (await res.json()) as any;
