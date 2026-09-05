@@ -80,33 +80,61 @@ pestering.
 
 ## Data safety form
 
-Answer exactly this way — each line matches what the code actually does.
+**Does your app collect or share any of the required user data types? -> Yes**
 
-**Does your app collect or share any of the required user data types?** Yes
+Two types, and the reasoning for each. Read these against the code before you
+submit; this is a legal declaration, not a form to be pasted through.
 
-| Data type | Collected | Shared | Purpose | Optional? |
-|---|---|---|---|---|
-| App activity → Other user-generated content | Yes | Yes | App functionality | Required |
-| App info and performance → Other | No | No | — | — |
-| Device or other IDs | No | No | — | — |
+### 1. App activity -> Other user-generated content
 
-Notes for each answer:
+| Field | Answer |
+|---|---|
+| Collected | **Yes** |
+| Shared | **Yes** |
+| Processed ephemerally | **Yes** |
+| Required or optional | Required |
+| Purpose | App functionality |
 
-- **User-generated content**: the conversation setup and messages, sent to
-  generate a reply. Mark **shared**, because it is passed to a third-party AI
-  provider to produce the response.
-- **Is data processed ephemerally?** **Yes** — it is used only to serve the
-  request and never stored.
-- **Device or other IDs → No.** The device identifier is generated randomly on
-  the device, is not an advertising or hardware ID, and is not linked to a
-  user. IP address kept only as a 48-hour abuse counter is standard security
-  processing and is not a declarable "Device ID".
-- **Is all data encrypted in transit?** **Yes** (HTTPS).
-- **Can users request data deletion?** **Yes** — in-app "Delete everything",
-  plus a contact address in the privacy policy.
+What it is: the counterpart description, the situation, and every message
+typed during a rehearsal. It is sent to our Worker and forwarded to the model
+provider to generate a reply.
 
-**Data safety is a legal declaration. Read each answer against the code
-yourself before submitting — do not take mine on trust.**
+"Collected" because it leaves the device. "Shared" because a third-party model
+provider receives it. "Ephemeral" because the Worker writes none of it down --
+it exists for the life of the request and is never logged or stored. Declaring
+it shared *and* ephemeral is the honest combination: pretending it never leaves
+would be false, and pretending we keep it would also be false.
+
+### 2. Device or other IDs
+
+| Field | Answer |
+|---|---|
+| Collected | **Yes** |
+| Shared | No |
+| Processed ephemerally | No |
+| Required or optional | Required |
+| Purpose | App functionality, and Fraud prevention / security / compliance |
+
+What it is: `deviceId`, a random UUID generated on the device, exchanged for a
+token and held server-side for 180 days, plus a request counter kept against
+that token and the caller's IP for 48 hours.
+
+An earlier draft of this file said No here, on the grounds that a random
+install id is not an advertising or hardware identifier. That was wrong. Play's
+own definition lists "Firebase installation ID" as an example, and this is
+functionally the same thing: random, per-install, persistent, stored
+server-side. It goes to no third party, so shared is No.
+
+### The rest
+
+Everything else is **not collected**: no name, email, phone, address, contacts,
+photos, location, financial info, health data, calendar, or files. Transcripts,
+scores and run history never leave the device at all.
+
+- **Encrypted in transit?** Yes, HTTPS throughout.
+- **Can users request deletion?** Yes -- "Delete everything" in the app wipes
+  local data immediately, and the privacy policy carries a contact address for
+  the server-side token. It expires by itself within 180 days regardless.
 
 ## Content rating questionnaire
 
