@@ -44,7 +44,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.dryrun.app"
+        // Must match the package name registered in Play Console, and it is
+        // permanent once published. Follows the publisher convention set by
+        // com.techtush.machinecharades. The namespace below is only the R and
+        // BuildConfig package and is deliberately left alone.
+        applicationId = "com.techtush.dryrun"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1

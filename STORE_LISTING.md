@@ -116,6 +116,11 @@ yourself before submitting — do not take mine on trust.**
   is ever visible to another user
 - Expected rating: **Everyone / PEGI 3**
 
+## Package name
+
+`com.techtush.dryrun` — matches the Play Console app entry and the publisher
+convention set by com.techtush.machinecharades. Permanent once published.
+
 ## Other required fields
 
 - **Category**: Productivity (alternative: Education)
