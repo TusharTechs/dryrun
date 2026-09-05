@@ -21,6 +21,7 @@ import com.dryrun.app.data.DryRunStore
 import com.dryrun.app.data.randomUuidV4
 import com.dryrun.app.drill.DailyDrill
 import com.dryrun.app.models.Rehearsal
+import com.dryrun.app.models.SeedScenario
 import com.dryrun.app.models.RunRecord
 import com.dryrun.app.notifications.LocalNotifier
 import com.dryrun.app.platform.currentTimeMillis
@@ -34,6 +35,7 @@ private sealed interface Screen {
     data object Home : Screen
     data object Scenarios : Screen
     data object Conversations : Screen
+    data class Schedule(val scenario: SeedScenario) : Screen
     data object Drill : Screen
     data object Rehearsing : Screen
     data class Feedback(val run: RunRecord) : Screen
@@ -159,20 +161,37 @@ fun App(localNotifier: LocalNotifier) {
                     // Picking a scenario already on the list reopens it rather
                     // than resetting it, so its runs and date survive.
                     val existing = conversations.firstOrNull { it.id == scenario.id }
-                    openConversation(
-                        existing ?: Rehearsal(
-                            id = scenario.id,
-                            counterpartRole = scenario.counterpartRole,
-                            counterpartPersonality = scenario.counterpartPersonality,
-                            situation = scenario.description,
-                            scheduledEpochMillis = currentTimeMillis() + 24L * 60 * 60 * 1000,
-                            createdAtMillis = currentTimeMillis()
-                        )
-                    )
+                    if (existing != null) openConversation(existing)
+                    else screen = Screen.Schedule(scenario)
                 },
                 onWriteMyOwn = { screen = Screen.Onboarding },
                 onBack = if (conversations.isEmpty()) null else ({ screen = Screen.Home })
             )
+
+            is Screen.Schedule -> {
+                val scenario = current.scenario
+                ScheduleScreen(
+                    counterpartRole = scenario.counterpartRole,
+                    onBack = { screen = Screen.Scenarios },
+                    onDone = { whenMillis, wantsReminder ->
+                        if (wantsReminder) {
+                            scheduleReminders(
+                                localNotifier, scenario.id, scenario.counterpartRole, whenMillis
+                            )
+                        }
+                        openConversation(
+                            Rehearsal(
+                                id = scenario.id,
+                                counterpartRole = scenario.counterpartRole,
+                                counterpartPersonality = scenario.counterpartPersonality,
+                                situation = scenario.description,
+                                scheduledEpochMillis = whenMillis,
+                                createdAtMillis = currentTimeMillis()
+                            )
+                        )
+                    }
+                )
+            }
 
             Screen.Conversations -> ConversationsScreen(
                 rehearsals = conversations,
@@ -211,6 +230,25 @@ fun App(localNotifier: LocalNotifier) {
                 } else {
                     val sessionState by active.state.collectAsState()
 
+                    // Finishing is one function so the retry runs exactly the
+                    // same path as the first attempt.
+                    fun finishRun() {
+                        scope.launch {
+                            active.finish()?.let { finished ->
+                                val record = finished.copy(rehearsalId = activeRehearsal.id)
+                                store.saveRun(record)
+                                refresh()
+                                // Their own best line, handed back the morning of.
+                                localNotifier.scheduleMorningOfNudge(
+                                    scheduleId = activeRehearsal.id,
+                                    bestLine = record.feedback.bestLine(),
+                                    epochMillis = activeRehearsal.scheduledEpochMillis
+                                )
+                                screen = Screen.Feedback(record)
+                            }
+                        }
+                    }
+
                     RehearsalScreen(
                         state = RehearsalUiState(
                             counterpartRole = activeRehearsal.counterpartRole,
@@ -219,26 +257,33 @@ fun App(localNotifier: LocalNotifier) {
                             error = sessionState.error
                         ),
                         onSend = { active.send(it) },
-                        onFinish = {
-                            scope.launch {
-                                active.finish()?.let { finished ->
-                                    val record = finished.copy(rehearsalId = activeRehearsal.id)
-                                    store.saveRun(record)
-                                    refresh()
-                                    // Their own best line, handed back the morning of.
-                                    localNotifier.scheduleMorningOfNudge(
-                                        scheduleId = activeRehearsal.id,
-                                        bestLine = record.feedback.bestLine(),
-                                        epochMillis = activeRehearsal.scheduledEpochMillis
-                                    )
-                                    screen = Screen.Feedback(record)
-                                }
-                            }
-                        },
+                        onFinish = { finishRun() },
                         onBack = { screen = Screen.Home }
                     )
 
                     if (sessionState.isScoring) ScoringOverlay()
+
+                    // Scoring failed. The run is still in memory, so offer the
+                    // retry here rather than dropping them back to a home
+                    // screen with nothing to show for the conversation.
+                    sessionState.scoringError?.let { message ->
+                        AlertDialog(
+                            onDismissRequest = { active.dismissScoringError() },
+                            title = { Text("Couldn't score that run") },
+                            text = { Text(message) },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    active.dismissScoringError()
+                                    finishRun()
+                                }) { Text("Try again") }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { active.dismissScoringError() }) {
+                                    Text("Keep talking")
+                                }
+                            }
+                        )
+                    }
                     sessionState.blocked?.let { message ->
                         AlertDialog(
                             onDismissRequest = { screen = Screen.Home },

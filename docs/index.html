@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DryRun — rehearse the conversation you're dreading</title>
+<meta name="description" content="A rehearsal app for hard conversations. The other person pushes back, your hedging is underlined as you type, and the silence is real. Private, and only on your phone.">
+<meta property="og:title" content="DryRun — rehearse the conversation you're dreading">
+<meta property="og:description" content="The other person pushes back. Your hedging is underlined as you type. The silence is real.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%2316151A'/><rect x='16' y='18' width='68' height='46' rx='13' fill='%23FBF9F5'/><path d='M31 62 L26 81 L49 62 Z' fill='%23FBF9F5'/><rect x='27' y='31' width='46' height='7' rx='3.5' fill='%2316151A'/><rect x='27' y='46' width='31' height='6' rx='3' fill='%23D9A94A'/></svg>">
+<style>
+  :root{
+    --ink:#16151A; --raised:#1D1D22; --line:#2A2A31;
+    --paper:#FBF9F5; --muted:#97938C;
+    --amber:#D9A94A; --signal:#9BB4DC;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--ink);color:var(--paper);font-family:var(--sans);
+       line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:760px;margin:0 auto;padding:0 24px}
+  a{color:var(--signal)}
+
+  /* hero */
+  header{padding:96px 0 72px;text-align:center}
+  .mark{display:flex;gap:7px;justify-content:center;margin-bottom:40px}
+  .mark i{width:13px;height:13px;border-radius:4px;background:var(--line)}
+  .mark i:nth-child(2){background:var(--amber)}
+  h1{font-size:clamp(2.1rem,6.2vw,3.4rem);line-height:1.1;letter-spacing:-.03em;
+     margin:0 0 22px;font-weight:800}
+  .lede{max-width:520px;margin:0 auto;color:var(--muted);font-size:1.06rem}
+  .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:38px 0 18px}
+  .btn{display:inline-block;padding:13px 24px;border-radius:999px;text-decoration:none;
+       font-weight:600;font-size:.95rem;border:1px solid transparent}
+  .btn.primary{background:var(--amber);color:#1F1808}
+  .btn.ghost{border-color:var(--line);color:var(--paper)}
+  .status{font-family:var(--mono);font-size:.76rem;color:var(--muted);letter-spacing:.04em}
+
+  /* the demo */
+  .demo{background:var(--raised);border:1px solid var(--line);border-radius:18px;
+        padding:26px;margin:8px 0 64px}
+  .demo .cap{font-family:var(--mono);font-size:.7rem;color:var(--muted);
+             letter-spacing:.12em;text-transform:uppercase;margin-bottom:20px}
+  .bubble{max-width:86%;padding:13px 17px;border-radius:15px;margin-bottom:11px;font-size:.97rem}
+  .them{background:#26262D}
+  .you{background:#2C3B54;margin-left:auto}
+  .hedge{color:var(--amber);text-decoration:underline;text-underline-offset:3px}
+  .count{font-family:var(--mono);font-size:.73rem;color:var(--amber);margin:14px 0 0}
+  .silence{display:flex;align-items:center;gap:11px;color:var(--muted);
+           font-size:.9rem;margin-top:16px}
+  .dots{display:flex;gap:5px}
+  .dots span{width:6px;height:6px;border-radius:50%;background:var(--muted);opacity:.45;
+             animation:fade 1.5s infinite}
+  .dots span:nth-child(2){animation-delay:.25s}
+  .dots span:nth-child(3){animation-delay:.5s}
+  @keyframes fade{0%,100%{opacity:.2}50%{opacity:.85}}
+  @media (prefers-reduced-motion:reduce){.dots span{animation:none;opacity:.45}}
+
+  /* sections */
+  section{padding:0 0 64px}
+  h2{font-size:clamp(1.45rem,3.6vw,1.95rem);letter-spacing:-.02em;margin:0 0 16px;font-weight:750}
+  p{margin:0 0 16px}
+  .muted{color:var(--muted)}
+
+  .scores{border-top:1px solid var(--line);margin-top:26px}
+  .row{display:flex;justify-content:space-between;align-items:center;gap:16px;
+       padding:15px 2px;border-bottom:1px solid var(--line)}
+  .row .label{font-size:.97rem}
+  .bars{display:flex;gap:4px;flex:0 0 auto}
+  .bars b{width:26px;height:5px;border-radius:3px;background:var(--line)}
+  .bars b.on{background:var(--signal)}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin-top:26px}
+  .card{background:var(--raised);border:1px solid var(--line);border-radius:14px;padding:19px}
+  .card h3{margin:0 0 6px;font-size:1rem;font-weight:650}
+  .card p{margin:0;color:var(--muted);font-size:.9rem}
+
+  footer{border-top:1px solid var(--line);padding:34px 0 56px;
+         color:var(--muted);font-size:.85rem;text-align:center}
+  footer a{color:var(--muted)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="mark" aria-hidden="true"><i></i><i></i><i></i></div>
+    <h1>You know what to say.<br>Then you soften it.</h1>
+    <p class="lede">DryRun is where you have the conversation badly first — with someone
+      who pushes back, goes quiet, and doesn't let you off the hook.</p>
+    <div class="cta">
+      <a class="btn primary" href="#">Get it on Google Play</a>
+      <a class="btn ghost" href="privacy.html">Privacy</a>
+    </div>
+    <p class="status">CURRENTLY IN CLOSED TESTING &middot; ANDROID &middot; IOS TO FOLLOW</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="demo">
+    <p class="cap">A run, as it happens</p>
+    <div class="bubble them">Hey, what's going on?</div>
+    <div class="bubble you">I <span class="hedge">just</span> wanted to
+      <span class="hedge">maybe</span> chat about how things have been going,
+      <span class="hedge">sorry to</span> bring it up</div>
+    <div class="bubble them">What do you actually mean?</div>
+    <div class="bubble you">The checkout file landed Thursday. Engineering needed it Monday.
+      That's the third late handoff in two months.</div>
+    <div class="silence">
+      <span class="dots" aria-hidden="true"><span></span><span></span><span></span></span>
+      They're not saying anything.
+    </div>
+    <p class="count">3 hedges &middot; mostly "just"</p>
+  </div>
+
+  <section>
+    <h2>Your hedging is underlined as you type</h2>
+    <p><em>Just</em>. <em>Maybe</em>. <em>Sorry to bother you</em>. <em>I might be wrong but</em>.
+      Marked the moment you write them, with a running count of the one you lean on most.
+      Not blocked — marked. The point is to see the shape of your own flinching
+      before you send it, not to be corrected afterwards.</p>
+    <p class="muted">The detector runs entirely on your phone, so it never waits on a network
+      and never sends anything to find a hedge.</p>
+  </section>
+
+  <section>
+    <h2>And when you finally say it straight, they say nothing</h2>
+    <p>Three full seconds of dead air. Most people fill it — and undo the thing they
+      just did well. Sitting in the silence is the actual skill, so the app measures whether
+      you did, on the device, as a fact rather than a model's opinion.</p>
+  </section>
+
+  <section>
+    <h2>Then it tells you what you actually did</h2>
+    <p>Four things, each quoted back to you word for word from your own transcript.
+      No score out of a hundred, no grade, no encouragement you didn't earn.</p>
+    <div class="scores" role="table" aria-label="What a run is scored on">
+      <div class="row"><span class="label">Named the specific thing</span>
+        <span class="bars"><b class="on"></b><b class="on"></b></span></div>
+      <div class="row"><span class="label">Said what it cost</span>
+        <span class="bars"><b class="on"></b><b class="on"></b></span></div>
+      <div class="row"><span class="label">Left them room to answer</span>
+        <span class="bars"><b class="on"></b><b class="on"></b></span></div>
+      <div class="row"><span class="label">Held the point under pushback</span>
+        <span class="bars"><b></b><b></b></span></div>
+    </div>
+    <p class="muted" style="margin-top:18px">Run it again and DryRun shows you the line that
+      changed — your hedged version and your straight one, side by side. That comparison
+      is the whole app.</p>
+  </section>
+
+  <section>
+    <h2>What you type stays on your phone</h2>
+    <p>The conversation you're rehearsing is about a real colleague. So there's no account,
+      no name, no email — and no share button anywhere in the app, on purpose. Transcripts
+      and scores never leave the device, and messages are sent only to generate a reply and
+      are never stored. <a href="privacy.html">The privacy policy</a> says exactly what that
+      means, in the same plain words.</p>
+    <div class="grid">
+      <div class="card"><h3>Seven conversations to start</h3>
+        <p>Delivering feedback, setting a boundary, saying no. Or write the one you're
+          actually dreading.</p></div>
+      <div class="card"><h3>Keep as many as you need</h3>
+        <p>Each conversation keeps its own runs and its own progress.</p></div>
+      <div class="card"><h3>Today's line</h3>
+        <p>One softened sentence a day, rewritten straight. Sixty seconds, offline.</p></div>
+      <div class="card"><h3>One reminder, if you want it</h3>
+        <p>The evening before your conversation. No streaks, no daily pestering.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Built in the open</h2>
+    <p>Kotlin Multiplatform — nearly all of the code is written once and runs on both
+      Android and iOS, including every screen. The API is a Cloudflare Worker and
+      subscriptions run through RevenueCat.</p>
+    <p class="muted">The hedge detector is deterministic and offline, which means it can be
+      tested properly — including against the daily drill's own content, where two invariants
+      (every soft line contains a hedge, every straight answer contains none) caught an entire
+      missing category: pre-emptive self-deprecation. <em>I hope this isn't a stupid
+      question.</em> <em>I'm probably being dense.</em> The thing the app is about, and it was
+      going undetected.</p>
+  </section>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    DryRun — built by Tushar &middot; <a href="privacy.html">Privacy</a> &middot;
+    <a href="mailto:tusharaggarwal274@gmail.com">Contact</a>
+  </div>
+</footer>
+
+</body>
+</html>

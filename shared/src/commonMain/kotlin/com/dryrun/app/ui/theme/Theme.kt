@@ -53,6 +53,15 @@ private val LightScheme = lightColorScheme(
     onSurface = Ink,
     surfaceVariant = PaperRaised,
     onSurfaceVariant = Muted,
+    // Dialogs and elevated sheets read from the container roles, not from
+    // surface. Left undefined they fall back to Material's lavender, which is
+    // how every AlertDialog in the app ended up the wrong colour.
+    surfaceContainerLowest = Color(0xFFFFFDF9),
+    surfaceContainerLow = Color(0xFFF7F4EE),
+    surfaceContainer = PaperRaised,
+    surfaceContainerHigh = Color(0xFFEFEBE2),
+    surfaceContainerHighest = Color(0xFFE9E5DB),
+    surfaceTint = Signal,
     outline = Color(0xFFD8D3C9),
     error = Color(0xFF8C3A3A)
 )
@@ -72,6 +81,12 @@ private val DarkScheme = darkColorScheme(
     onSurface = DarkInk,
     surfaceVariant = DarkPaperRaised,
     onSurfaceVariant = DarkMuted,
+    surfaceContainerLowest = Color(0xFF0E0E11),
+    surfaceContainerLow = Color(0xFF17171B),
+    surfaceContainer = DarkPaperRaised,
+    surfaceContainerHigh = Color(0xFF24242A),
+    surfaceContainerHighest = Color(0xFF2C2C33),
+    surfaceTint = SignalDark,
     outline = Color(0xFF34343A),
     error = Color(0xFFD98A8A)
 )

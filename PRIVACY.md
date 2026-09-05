@@ -84,4 +84,4 @@ new version will be published here before it takes effect.
 
 ## Contact
 
-[YOUR CONTACT EMAIL]
+tusharaggarwal274@gmail.com

@@ -2,6 +2,7 @@ package com.dryrun.app
 
 import com.dryrun.app.coach.HedgeDetector
 import com.dryrun.app.data.DryRunApi
+import com.dryrun.app.data.FeedbackResult
 import com.dryrun.app.data.RoleplayResult
 import com.dryrun.app.models.CounterpartState
 import com.dryrun.app.models.FeedbackReport
@@ -100,6 +101,11 @@ class RehearsalSession(
                 fail("That's a lot of practice for one day. Come back tomorrow.")
             RoleplayResult.Offline ->
                 fail("No connection. Your words didn't land — try again.")
+            RoleplayResult.ServiceDown ->
+                fail(
+                    "DryRun's practice partner is offline right now. " +
+                        "That's our problem, not yours — nothing you wrote is lost."
+                )
             RoleplayResult.Failed ->
                 fail("Something broke on our end. Try again in a few seconds.")
         }
@@ -136,6 +142,16 @@ class RehearsalSession(
         }
     }
 
+    /** Leaves the run intact and asks the screen to offer a retry. */
+    private fun scoringFailed(message: String): RunRecord? {
+        _state.value = _state.value.copy(isScoring = false, scoringError = message)
+        return null
+    }
+
+    fun dismissScoringError() {
+        _state.value = _state.value.copy(scoringError = null)
+    }
+
     private fun fail(message: String) {
         _state.value = _state.value.copy(isThinking = false, error = message)
     }
@@ -148,8 +164,9 @@ class RehearsalSession(
         beatJob?.cancel()
         _state.value = _state.value.copy(isScoring = true)
 
+        _state.value = _state.value.copy(scoringError = null)
         val hedges = HedgeDetector.analyse(spokenByUser())
-        val feedback: FeedbackReport? = api.feedback(
+        val scored = api.feedback(
             scenarioId = scenarioId,
             counterpart = counterpart,
             situation = situation,
@@ -162,9 +179,19 @@ class RehearsalSession(
         )
 
         _state.value = _state.value.copy(isScoring = false)
-        if (feedback == null) {
-            fail("Couldn't score that run. Check your connection and try again.")
-            return null
+        val feedback = when (scored) {
+            is FeedbackResult.Ok -> scored.report
+            FeedbackResult.ServiceDown -> return scoringFailed(
+                "DryRun's practice partner is offline right now. That's our problem, " +
+                    "not yours. Your run is still here — try again in a bit."
+            )
+            FeedbackResult.Offline -> return scoringFailed(
+                "No connection, so this run couldn't be scored yet. " +
+                    "It's still here — reconnect and try again."
+            )
+            FeedbackResult.Failed -> return scoringFailed(
+                "Couldn't score that run. Nothing is lost — try again."
+            )
         }
 
         return RunRecord(
@@ -186,5 +213,12 @@ data class SessionState(
     val isScoring: Boolean = false,
     val error: String? = null,
     /** Set when the safety filter declines to roleplay something. */
-    val blocked: String? = null
+    val blocked: String? = null,
+    /**
+     * Set when a finished run could not be scored. Surfaced as a dialog with a
+     * retry rather than a line in the transcript, because by then the
+     * transcript has scrolled and tapping Done appearing to do nothing is how
+     * someone loses a whole rehearsal and gives up on the app.
+     */
+    val scoringError: String? = null
 )

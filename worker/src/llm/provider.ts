@@ -27,6 +27,41 @@ export interface ModelCallOptions {
 export interface ModelResult {
   text: string | null;
   timedOut: boolean;
+  /**
+   * True when the provider itself refused us -- a dead or revoked key,
+   * exhausted credit, or the provider's own rate limit. Distinct from a
+   * transient blip because retrying in a few seconds cannot fix it, and
+   * telling a user to do that is how you get uninstalled.
+   */
+  outage?: boolean;
+}
+
+/**
+ * Provider statuses that mean "this will not work on a retry": bad key,
+ * no credit, forbidden, or we are being throttled upstream.
+ */
+export function isOutageStatus(status: number): boolean {
+  return status === 401 || status === 402 || status === 403 || status === 429;
+}
+
+/**
+ * Google answers a dead or revoked key with 400 INVALID_ARGUMENT rather than
+ * 401, so status alone would file it as a passing glitch and tell the user to
+ * retry forever. These markers are the ones Google uses for key and quota
+ * problems; matching is done on the marker only, and the body is never logged
+ * because it can echo the key back.
+ */
+export function bodyIndicatesOutage(body: string): boolean {
+  const markers = [
+    "API_KEY_INVALID",
+    "API key not valid",
+    "PERMISSION_DENIED",
+    "RESOURCE_EXHAUSTED",
+    "quota",
+    "billing",
+  ];
+  const haystack = body.toLowerCase();
+  return markers.some((m) => haystack.includes(m.toLowerCase()));
 }
 
 // A phone on a train needs more than three seconds. The old 3s timeout

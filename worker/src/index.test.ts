@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import worker from "./index";
+import { isOutageStatus, bodyIndicatesOutage } from "./llm/provider";
 import { validateFeedbackResponse } from "./prompts/feedback";
 import { validateRoleplayOutput } from "./prompts/roleplay";
 import { checkSafety } from "./safety";
@@ -387,5 +388,41 @@ describe("validators", () => {
     expect(validateRoleplayOutput({ state: {} })).toBeNull();
     expect(validateRoleplayOutput(null)).toBeNull();
     expect(validateRoleplayOutput("nope")).toBeNull();
+  });
+});
+
+describe("provider outage", () => {
+  it("treats refusal statuses as an outage and everything else as transient", () => {
+    // A dead key, spent credit, forbidden, or upstream throttling. None of
+    // these get better if the user taps retry a second later.
+    expect(isOutageStatus(401)).toBe(true);
+    expect(isOutageStatus(402)).toBe(true);
+    expect(isOutageStatus(403)).toBe(true);
+    expect(isOutageStatus(429)).toBe(true);
+
+    // These might. They must not be reported as an outage.
+    expect(isOutageStatus(500)).toBe(false);
+    expect(isOutageStatus(502)).toBe(false);
+    expect(isOutageStatus(503)).toBe(false);
+    expect(isOutageStatus(504)).toBe(false);
+    expect(isOutageStatus(200)).toBe(false);
+  });
+});
+
+describe("provider outage body markers", () => {
+  it("recognises a dead Google key, which arrives as a 400 rather than a 401", () => {
+    expect(
+      bodyIndicatesOutage('{"error":{"code":400,"status":"INVALID_ARGUMENT",' +
+        '"message":"API key not valid. Please pass a valid API key."}}')
+    ).toBe(true);
+    expect(bodyIndicatesOutage('{"error":{"status":"RESOURCE_EXHAUSTED"}}')).toBe(true);
+    expect(bodyIndicatesOutage('{"error":{"message":"Quota exceeded"}}')).toBe(true);
+  });
+
+  it("does not mistake our own malformed request for an outage", () => {
+    expect(
+      bodyIndicatesOutage('{"error":{"code":400,"status":"INVALID_ARGUMENT",' +
+        '"message":"Invalid JSON payload received. Unknown name \\"foo\\"."}}')
+    ).toBe(false);
   });
 });

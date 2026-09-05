@@ -136,6 +136,23 @@ async function handleRoleplay(request: Request, env: Env): Promise<Response> {
     );
   }
 
+  // The provider refused us outright -- dead key, spent credit, or its own
+  // rate limit. Retrying in a few seconds cannot fix that, so say so plainly
+  // rather than sending the user round a loop that never succeeds.
+  if (result.outage) {
+    return json(
+      {
+        reply: "",
+        state,
+        silence: false,
+        error: "service_unavailable",
+        message:
+          "DryRun's practice partner is offline right now. This is our problem, not yours — nothing you wrote is lost.",
+      },
+      503
+    );
+  }
+
   const parsed = result.text ? validateRoleplayOutput(parseJsonLoosely(result.text)) : null;
   if (!parsed) {
     return json(
@@ -211,6 +228,7 @@ async function handleFeedback(request: Request, env: Env): Promise<Response> {
   );
 
   if (result.timedOut) return feedbackError("timeout", 504);
+  if (result.outage) return feedbackError("service_unavailable", 503);
   if (!result.text) return feedbackError("model_error", 502);
 
   const parsed = parseJsonLoosely(result.text);

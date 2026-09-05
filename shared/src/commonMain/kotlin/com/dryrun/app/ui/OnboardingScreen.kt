@@ -73,36 +73,55 @@ fun OnboardingScreen(
         }
     }
 
-    // The permission ask happens here, at the moment the date is set — never on launch.
     if (askAboutReminder) {
-        AlertDialog(
-            onDismissRequest = { askAboutReminder = false },
-            title = { Text("Want a nudge the night before?") },
-            text = {
-                Text(
-                    "One reminder the evening before, so you get a last run in. " +
-                        "No streaks, no daily pestering."
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    askAboutReminder = false
-                    localNotifier.requestPermission { granted ->
-                        if (granted) {
-                            localNotifier.scheduleEveningBeforeReminder(scheduleId, role, whenMillis)
-                            localNotifier.scheduleFollowUp(scheduleId, whenMillis)
-                        }
-                    }
-                    onComplete(role, personality, situation, whenMillis)
-                }) { Text("Yes, remind me") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    askAboutReminder = false
-                    onComplete(role, personality, situation, whenMillis)
-                }) { Text("No thanks") }
+        ReminderPrompt(
+            onDecide = { wantsReminder ->
+                askAboutReminder = false
+                if (wantsReminder) {
+                    scheduleReminders(localNotifier, scheduleId, role, whenMillis)
+                }
+                onComplete(role, personality, situation, whenMillis)
             }
         )
+    }
+}
+
+/**
+ * The permission ask. Shown at the moment a date is set and never on launch,
+ * and worded so declining is obviously fine.
+ */
+@Composable
+internal fun ReminderPrompt(onDecide: (wantsReminder: Boolean) -> Unit) {
+    AlertDialog(
+        onDismissRequest = { onDecide(false) },
+        title = { Text("Want a nudge the night before?") },
+        text = {
+            Text(
+                "One reminder the evening before, so you get a last run in. " +
+                    "No streaks, no daily pestering."
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onDecide(true) }) { Text("Yes, remind me") }
+        },
+        dismissButton = {
+            TextButton(onClick = { onDecide(false) }) { Text("No thanks") }
+        }
+    )
+}
+
+/** Both beats of the reminder loop that depend on the date being known. */
+internal fun scheduleReminders(
+    localNotifier: LocalNotifier,
+    scheduleId: String,
+    counterpartRole: String,
+    whenMillis: Long
+) {
+    localNotifier.requestPermission { granted ->
+        if (granted) {
+            localNotifier.scheduleEveningBeforeReminder(scheduleId, counterpartRole, whenMillis)
+            localNotifier.scheduleFollowUp(scheduleId, whenMillis)
+        }
     }
 }
 
@@ -159,7 +178,7 @@ private fun StepWhat(situation: String, onChange: (String) -> Unit) {
 }
 
 @Composable
-private fun StepWhen(selected: Long, onSelect: (Long) -> Unit) {
+internal fun StepWhen(selected: Long, onSelect: (Long) -> Unit) {
     Column {
         Text("When is it?", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(20.dp))
@@ -185,7 +204,7 @@ private fun StepWhen(selected: Long, onSelect: (Long) -> Unit) {
 
 private data class Slot(val millis: Long)
 
-private fun defaultSlot(): Long = atLocalTimeOfDay(currentTimeMillis() + DAY_MS, 9, 0)
+internal fun defaultSlot(): Long = atLocalTimeOfDay(currentTimeMillis() + DAY_MS, 9, 0)
 
 private fun slots(): List<Slot> {
     val now = currentTimeMillis()

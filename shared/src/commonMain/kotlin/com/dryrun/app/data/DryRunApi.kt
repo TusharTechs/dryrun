@@ -78,6 +78,8 @@ class DryRunApi(private val store: DryRunStore) {
             when {
                 res.status.value == 422 -> RoleplayResult.Blocked(res.body<BlockedResponse>().message)
                 res.status.value == 429 -> RoleplayResult.RateLimited
+                // 503 is the provider refusing us, not a passing blip.
+                res.status.value == 503 -> RoleplayResult.ServiceDown
                 !res.status.isSuccess() -> RoleplayResult.Failed
                 else -> {
                     val body = res.body<RoleplayResponse>()
@@ -99,8 +101,8 @@ class DryRunApi(private val store: DryRunStore) {
         hedgeTopCount: Int,
         silenceOffered: Int,
         silenceFilled: Int
-    ): FeedbackReport? {
-        val token = token() ?: return null
+    ): FeedbackResult {
+        val token = token() ?: return FeedbackResult.Offline
         return try {
             val res: HttpResponse = client.post("$BASE_URL/feedback") {
                 contentType(ContentType.Application.Json)
@@ -121,20 +123,35 @@ class DryRunApi(private val store: DryRunStore) {
                     )
                 )
             }
-            if (!res.status.isSuccess()) return null
+            if (res.status.value == 503) return FeedbackResult.ServiceDown
+            if (!res.status.isSuccess()) return FeedbackResult.Failed
             val body = res.body<FeedbackResponseWire>()
-            if (body.criteria.size != 4) return null
-            FeedbackReport(
-                criteria = body.criteria.map {
-                    CriterionScore(it.id, it.score, it.triggerLine, it.note)
-                },
-                overall = body.overall,
-                strongestLine = body.strongestLine
+            if (body.criteria.size != 4) return FeedbackResult.Failed
+            FeedbackResult.Ok(
+                FeedbackReport(
+                    criteria = body.criteria.map {
+                        CriterionScore(it.id, it.score, it.triggerLine, it.note)
+                    },
+                    overall = body.overall,
+                    strongestLine = body.strongestLine
+                )
             )
         } catch (_: Throwable) {
-            null
+            FeedbackResult.Offline
         }
     }
+}
+
+/**
+ * Why scoring didn't produce a report. The reason matters: telling someone to
+ * check their connection when the service is down sends them to fix something
+ * that isn't broken.
+ */
+sealed interface FeedbackResult {
+    data class Ok(val report: FeedbackReport) : FeedbackResult
+    data object ServiceDown : FeedbackResult
+    data object Offline : FeedbackResult
+    data object Failed : FeedbackResult
 }
 
 sealed interface RoleplayResult {
@@ -142,6 +159,8 @@ sealed interface RoleplayResult {
     data class Blocked(val message: String) : RoleplayResult
     data object RateLimited : RoleplayResult
     data object Offline : RoleplayResult
+    /** The service is down at our end. Retrying now will not help. */
+    data object ServiceDown : RoleplayResult
     data object Failed : RoleplayResult
 }
 
