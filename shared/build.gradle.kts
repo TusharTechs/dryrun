@@ -27,6 +27,11 @@ kotlin {
         compilerOptions {
             jvmTarget = JvmTarget.JVM_11
         }
+
+        // Runs commonTest on the JVM. The iOS test binary cannot link
+        // RevenueCatUI's Swift symbols, and the coach logic is pure Kotlin,
+        // so the host is both the correct and the far faster place for it.
+        withHostTestBuilder {}.configure {}
     }
 
     sourceSets {
