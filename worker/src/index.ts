@@ -8,7 +8,7 @@ import {
 } from "./types";
 import { mintToken, verifyToken } from "./auth";
 import { checkRateLimit } from "./ratelimit";
-import { checkSafety } from "./safety";
+import { checkSafety, checkOutputSafety, SAFE_FALLBACK_REPLY } from "./safety";
 import { callModel, parseJsonLoosely } from "./llm/provider";
 import { formatTranscript } from "./transcript";
 import {
@@ -198,8 +198,14 @@ async function handleRoleplay(request: Request, env: Env): Promise<Response> {
     turnsSinceLastBeat: body.turnsSinceLastBeat ?? 99,
   });
 
+  // The counterpart's own words, checked before they reach someone who came
+  // here because the real conversation frightens them. A blocked reply is
+  // swapped, not surfaced as an error -- the user did nothing wrong.
+  const spoken = parsed.reply.trim();
+  const safeReply = checkOutputSafety(spoken).safe ? spoken : SAFE_FALLBACK_REPLY;
+
   return json({
-    reply: silence ? "" : parsed.reply.trim(),
+    reply: silence ? "" : safeReply,
     state: nextState,
     silence,
   });

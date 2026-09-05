@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import worker from "./index";
 import { classifyFailure, bodyIndicatesOutage } from "./llm/provider";
+import { checkOutputSafety } from "./safety";
 import { validateFeedbackResponse } from "./prompts/feedback";
 import { validateRoleplayOutput } from "./prompts/roleplay";
 import { checkSafety } from "./safety";
@@ -425,5 +426,30 @@ describe("provider outage body markers", () => {
       bodyIndicatesOutage('{"error":{"code":400,"status":"INVALID_ARGUMENT",' +
         '"message":"Invalid JSON payload received. Unknown name \\"foo\\"."}}')
     ).toBe(false);
+  });
+});
+
+describe("counterpart output safety", () => {
+  it("blocks output that would harm the person practising", () => {
+    expect(checkOutputSafety("You should kill yourself.").safe).toBe(false);
+    expect(checkOutputSafety("Honestly, you should just die").safe).toBe(false);
+    expect(checkOutputSafety("That's basically grooming.").safe).toBe(false);
+  });
+
+  it("leaves ordinary workplace hostility alone", () => {
+    // These are the whole point of the counterpart. If the filter eats them it
+    // has made the app worse at the one thing it exists to do -- which is why
+    // the input patterns are deliberately not reused here.
+    for (const line of [
+      "Are you threatening me?",
+      "You're trying to hurt my reputation.",
+      "So you want to ruin their life over one deadline?",
+      "I feel attacked right now.",
+      "Is this about the sexual harassment complaint I raised?",
+      "What do you actually mean?",
+      "I delivered on time. This is an attack on my work.",
+    ]) {
+      expect(checkOutputSafety(line).safe).toBe(true);
+    }
   });
 });
